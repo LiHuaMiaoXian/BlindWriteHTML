@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
+<meta name="format-detection" content="telephone=no">
+<title>盲写 · 初稿推进器</title>
+<style>
+/* ================= 基础 ================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #ffffff;
+  --fg: #000000;
+  --muted: rgba(0, 0, 0, 0.45);
+  --line: rgba(0, 0, 0, 0.14);
+  --soft: rgba(0, 0, 0, 0.06);
+  /* 由 JS 按 visualViewport 实时更新，保证键盘弹出时不遮住输入区 */
+  --app-h: 100vh;
+  --app-top: 0px;
+  color-scheme: light;
+}
+
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC",
+               "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+/* ================= 屏幕容器 ================= */
+.screen {
+  position: fixed;
+  top: var(--app-top);
+  left: 0;
+  right: 0;
+  height: var(--app-h);
+  display: none;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+.screen.active { display: flex; }
+
+/* ================= 按钮 ================= */
+.btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1.5px solid var(--fg);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 15px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  transition: transform .12s ease, opacity .12s ease;
+  touch-action: manipulation;
+}
+.btn:active { transform: scale(0.97); opacity: .85; }
+.btn-primary { background: var(--fg); color: var(--bg); }
+.btn-ghost { border-color: var(--line); }
+.btn-block { display: block; width: 100%; }
+.btn-sm { padding: 12px 18px; font-size: 15px; }
+.btn-xs { padding: 8px 16px; font-size: 13px; }
+
+/* ================= 首页 / 完成页 ================= */
+.page-center {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 26px;
+  padding-top: calc(40px + env(safe-area-inset-top));
+  padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.brand-wrap { text-align: center; margin-bottom: 30px; }
+
+.brand {
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-indent: .14em;
+  line-height: 1.1;
+}
+
+.tagline {
+  margin-top: 12px;
+  font-size: 12px;
+  letter-spacing: .32em;
+  text-indent: .32em;
+  color: var(--muted);
+}
+
+.lead {
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.footnote {
+  margin-top: 38px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* ================= 顶栏 ================= */
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar-title { font-size: 15px; font-weight: 700; }
+
+.icon-btn {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none;
+  color: var(--fg);
+  font-size: 26px;
+  font-family: inherit;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.icon-btn:active { background: var(--soft); }
+.icon-btn.is-placeholder { visibility: hidden; }
+
+/* ================= 设置页 ================= */
+.scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 26px 22px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.field { display: flex; flex-direction: column; gap: 12px; }
+
+.label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.optional { font-weight: 400; letter-spacing: 0; color: var(--muted); }
+
+.segmented {
+  display: flex;
+  border: 1.5px solid var(--fg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.seg {
+  flex: 1;
+  padding: 12px 8px;
+  background: var(--bg);
+  color: var(--fg);
+  border: none;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+  touch-action: manipulation;
+}
+.seg.active { background: var(--fg); color: var(--bg); }
+
+.input-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-bottom: 2px solid var(--fg);
+  padding: 4px 0 8px;
+}
+
+.input-row input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 0;
+}
+.input-row input::-webkit-outer-spin-button,
+.input-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.input-row input[type=number] { -moz-appearance: textfield; }
+
+.unit { font-size: 15px; font-weight: 600; color: var(--muted); }
+
+.hint { font-size: 12px; line-height: 1.7; color: var(--muted); }
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  outline: none;
+  resize: vertical;
+  transition: border-color .15s ease;
+}
+textarea:focus { border-color: var(--fg); }
+textarea::placeholder { color: rgba(0,0,0,.3); }
+
+/* ---------- 起承转合模板输入 ---------- */
+.goal-template-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1.5px solid var(--line);
+}
+
+.goal-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1.5px solid var(--line);
+  padding: 2px 0;
+}
+
+.goal-input-label {
+  flex: 0 0 auto;
+  width: 24px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+}
+
+.goal-input-row input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 12px 0;
+}
+.goal-input-row input::placeholder { color: rgba(0,0,0,.28); }
+
+.bottombar {
+  flex: 0 0 auto;
+  padding: 14px 22px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+
+/* ================= 写作页 ================= */
+.write-head {
+  flex: 0 0 auto;
+  padding: 20px 22px 14px;
+  padding-top: calc(20px + env(safe-area-inset-top));
+}
+
+.write-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.stat {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--soft);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--fg);
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+
+/* ---------- 目标卡常驻面板 ---------- */
+.goal-panel {
+  flex: 0 0 auto;
+  max-height: 26vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  padding: 4px 0;
+}
+
+.goal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 22px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background .12s ease;
+  outline: none;
+}
+.goal-item:active { background: var(--soft); }
+.goal-item:focus-visible { background: var(--soft); }
+
+.goal-check {
+  flex: 0 0 auto;
+  display: block;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--fg);
+  border-radius: 50%;
+  position: relative;
+  transition: background .15s ease;
+}
+
+.goal-item.done .goal-check { background: var(--fg); }
+
+.goal-item.done .goal-check::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--bg);
+  border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg);
+}
+
+.goal-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.goal-item.done .goal-label { opacity: .5; }
+
+.goal-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg);
+  word-break: break-word;
+}
+
+.goal-item.done .goal-text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.goal-empty {
+  padding: 11px 22px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- 续写提示条 ---------- */
+.resume-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 22px;
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+}
+
+.resume-strip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg);
+  word-break: break-word;
+}
+
+.resume-strip-close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  font-family: inherit;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.resume-strip-close:active { background: var(--line); }
+
+/* ---------- 输入区 ---------- */
+.write-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+  盲写输入框：整体不可见（连长按放大镜也只能看到空白）。
+  文字、光标、选择全部透明，避免任何方式泄露正文。
+*/
+#blind {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: transparent;
+  opacity: 0;
+  font-size: 16px;             /* 防止 iOS 聚焦时自动缩放 */
+  line-height: 1.7;
+  padding: 22px;
+  overflow: hidden;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.write-tip {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity .3s ease;
+}
+.write-tip.hide { opacity: 0; }
+
+.tip-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--fg);
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .2; transform: scale(.65); }
+}
+
+.write-tip p {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: center;
+  padding: 0 24px;
+}
+
+.tip-sub {
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--muted) !important;
+}
+
+.refocus-tip {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+  background: rgba(255,255,255,.92);
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+/* ---------- 底部操作栏 ---------- */
+.write-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+
+#btn-unlock {
+  flex: 1;
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,.28); }
+  50%      { box-shadow: 0 0 0 9px rgba(0,0,0,0); }
+}
+
+/* ================= 暂停层 ================= */
+.pause-overlay {
+  position: fixed;
+  top: var(--app-top);
+  left: 0; right: 0;
+  height: var(--app-h);
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.pause-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 26px 22px 30px;
+  padding-top: calc(26px + env(safe-area-inset-top));
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.pause-head { display: flex; flex-direction: column; gap: 8px; }
+
+.pause-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.pause-sub {
+  font-size: 14px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pause-section { display: flex; flex-direction: column; gap: 10px; }
+
+.pause-section-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.pause-goals {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.pause-goals .goal-item { padding-left: 0; padding-right: 0; }
+.pause-goals .goal-item:active { background: transparent; }
+.pause-goals .goal-empty { padding-left: 0; }
+
+.pause-note { min-height: 88px; }
+
+.pause-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+.pause-actions .btn { flex: 1; }
+
+/* ================= 完成页 ================= */
+.done-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto 32px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg);
+  padding: 16px 18px;
+  font-size: 15px;
+}
+.stat-row span { color: var(--muted); }
+.stat-row b {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* ================= 弹窗 ================= */
+.modal {
+  position: fixed;
+  top: var(--app-top);
+  left: 0; right: 0;
+  height: var(--app-h);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.modal.show { display: flex; }
+
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(var(--app-h) - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--bg);
+  border: 1.5px solid var(--fg);
+  border-radius: 18px;
+  padding: 22px;
+  overflow: hidden;
+}
+
+.modal-title {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: var(--muted);
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  font-size: 16px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.modal-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+}
+.modal-actions .btn { flex: 1; }
+
+.modal-actions-vertical {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ================= Toast ================= */
+#toast {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--app-top) + var(--app-h) - 104px);
+  transform: translate(-50%, 12px);
+  z-index: 999;
+  max-width: 80vw;
+  padding: 11px 20px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  border-radius: 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ================= 无障碍 / 减少动态 ================= */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ 首页 ============ -->
+<section id="screen-home" class="screen active">
+  <div class="page-center">
+    <div class="brand-wrap">
+      <h1 class="brand">盲写</h1>
+      <p class="tagline">写完再改</p>
+    </div>
+
+    <p class="lead">写作过程中，你看不到自己写下的任何一个字。<br>只有达成你设定的条件，才能解锁并导出。</p>
+
+    <div class="stack">
+      <button type="button" class="btn btn-primary btn-block" id="btn-new">新建文档</button>
+      <button type="button" class="btn btn-ghost btn-block" id="btn-resume" hidden>继续上次写作</button>
+    </div>
+
+    <p class="footnote">所有内容只保存在本机浏览器，不会上传到任何服务器。</p>
+  </div>
+</section>
+
+<!-- ============ 设置页 ============ -->
+<section id="screen-setup" class="screen">
+  <header class="topbar">
+    <button type="button" class="icon-btn" id="btn-setup-back" aria-label="返回">‹</button>
+    <span class="topbar-title">新建文档</span>
+    <span class="icon-btn is-placeholder" aria-hidden="true"></span>
+  </header>
+
+  <div class="scroll-body">
+    <div class="field">
+      <div class="label">解锁条件</div>
+      <div class="segmented" id="mode-switch">
+        <button type="button" class="seg active" data-mode="words">按字数</button>
+        <button type="button" class="seg" data-mode="time">按时间</button>
+      </div>
+    </div>
+
+    <div class="field" id="field-words">
+      <div class="label">目标字数</div>
+      <div class="input-row">
+        <input id="input-words" type="number" inputmode="numeric" min="1" max="500000" step="1" value="2000" autocomplete="off">
+        <span class="unit">字</span>
+      </div>
+      <div class="hint">写满这个字数后，才会出现解锁按钮。空格和换行不计入。</div>
+    </div>
+
+    <div class="field" id="field-time" hidden>
+      <div class="label">目标时长</div>
+      <div class="input-row">
+        <input id="input-time" type="number" inputmode="numeric" min="1" max="1440" step="1" value="20" autocomplete="off">
+        <span class="unit">分钟</span>
+      </div>
+      <div class="hint">计时从开始写作算起；暂停、切到后台、打开弹窗时都不计时。</div>
+    </div>
+
+    <div class="field">
+      <div class="label">目标卡 <span class="optional">（可留空）</span></div>
+
+      <div class="segmented" id="goal-mode-switch">
+        <button type="button" class="seg active" data-goal-mode="template">起承转合</button>
+        <button type="button" class="seg" data-goal-mode="free">自由多行</button>
+      </div>
+
+      <div class="goal-template-list" id="goal-template-inputs">
+        <div class="goal-input-row">
+          <span class="goal-input-label">起</span>
+          <input class="goal-template-input" data-label="起" type="text" maxlength="80" placeholder="开头写什么？" autocomplete="off">
+        </div>
+        <div class="goal-input-row">
+          <span class="goal-input-label">承</span>
+          <input class="goal-template-input" data-label="承" type="text" maxlength="80" placeholder="接着展开什么？" autocomplete="off">
+        </div>
+        <div class="goal-input-row">
+          <span class="goal-input-label">转</span>
+          <input class="goal-template-input" data-label="转" type="text" maxlength="80" placeholder="在哪里转折？" autocomplete="off">
+        </div>
+        <div class="goal-input-row">
+          <span class="goal-input-label">合</span>
+          <input class="goal-template-input" data-label="合" type="text" maxlength="80" placeholder="最后收在哪？" autocomplete="off">
+        </div>
+      </div>
+
+      <div id="goal-free-inputs" hidden>
+        <textarea id="input-goal-free" rows="5" maxlength="2000" placeholder="每行写一条，比如：&#10;主角推开那扇门&#10;解释他为什么拒绝&#10;转到第二天早上"></textarea>
+      </div>
+
+      <div class="hint">写作时会常驻显示，写完一条就勾掉一条。</div>
+    </div>
+  </div>
+
+  <footer class="bottombar">
+    <button type="button" class="btn btn-primary btn-block" id="btn-start">开始盲写</button>
+  </footer>
+</section>
+
+<!-- ============ 写作页 ============ -->
+<section id="screen-writing" class="screen">
+  <header class="write-head">
+    <div class="write-head-row">
+      <div class="stat" id="stat-label">0 / 2000 字</div>
+      <button type="button" class="btn btn-ghost btn-xs" id="btn-pause">暂停</button>
+    </div>
+    <div class="bar"><div class="bar-fill" id="bar-fill"></div></div>
+  </header>
+
+  <div id="goal-panel" class="goal-panel" hidden>
+    <div id="goal-panel-inner"></div>
+  </div>
+
+  <div class="resume-strip" id="resume-strip" hidden>
+    <span class="resume-strip-text" id="resume-strip-text"></span>
+    <button type="button" class="resume-strip-close" id="btn-resume-close" aria-label="关闭提示">×</button>
+  </div>
+
+  <div class="write-body">
+    <textarea id="blind"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      aria-label="盲写输入区"></textarea>
+    <div class="write-tip" id="write-tip" aria-hidden="true">
+      <div class="tip-dot"></div>
+      <p>点击这里开始盲写</p>
+      <p class="tip-sub">你打的字不会被显示出来</p>
+    </div>
+    <div class="refocus-tip" id="refocus-tip" hidden>点任意处继续写</div>
+  </div>
+
+  <footer class="write-foot">
+    <button type="button" class="btn btn-ghost btn-sm" id="btn-abandon">放弃</button>
+    <button type="button" class="btn btn-primary btn-sm" id="btn-unlock" hidden>已达成 · 解锁</button>
+  </footer>
+</section>
+
+<!-- ============ 暂停层 ============ -->
+<div class="pause-overlay" id="pause-overlay" role="dialog" aria-modal="true" aria-label="已暂停" hidden>
+  <div class="pause-scroll">
+    <div class="pause-head">
+      <div class="pause-title">已暂停</div>
+      <div class="pause-sub" id="pause-stats">0 字 · 00:00</div>
+    </div>
+
+    <div class="pause-section">
+      <div class="pause-section-label">目标卡</div>
+      <div class="pause-goals" id="pause-goals"></div>
+      <div class="hint">在这里也可以勾选，帮你理清接下来写哪块。</div>
+    </div>
+
+    <div class="pause-section">
+      <div class="pause-section-label">续写卡 · 接下来写什么？</div>
+      <textarea class="pause-note" id="pause-note" rows="3" maxlength="500" placeholder="一句话就行，比如：&#10;让他先沉默三秒，再回答"></textarea>
+      <div class="hint">恢复后会显示在写作页顶部，随时可以关掉。这不是正文，不会进入导出文件。</div>
+    </div>
+  </div>
+
+  <div class="pause-actions">
+    <button type="button" class="btn btn-ghost" id="btn-pause-abandon">放弃</button>
+    <button type="button" class="btn btn-primary" id="btn-pause-resume">继续写</button>
+  </div>
+</div>
+
+<!-- ============ 完成页 ============ -->
+<section id="screen-done" class="screen">
+  <div class="page-center">
+    <div class="brand-wrap">
+      <h1 class="brand">已解锁</h1>
+      <p class="tagline">初稿完成</p>
+    </div>
+
+    <p class="lead">请先保存好你的稿子，再去慢慢修改。<br>下载失败时可以点「复制全文」。</p>
+
+    <div class="done-stats" id="done-stats"></div>
+
+    <div class="stack">
+      <button type="button" class="btn btn-primary btn-block" id="btn-download-again">下载 TXT</button>
+      <button type="button" class="btn btn-ghost btn-block" id="btn-copy-done">复制全文</button>
+      <button type="button" class="btn btn-ghost btn-block" id="btn-new-2">新建文档</button>
+    </div>
+
+    <p class="footnote">这个工具不提供编辑功能。<br>修改，是另一个阶段的事。</p>
+  </div>
+</section>
+
+<!-- ============ 弹窗：解锁确认 ============ -->
+<div class="modal" id="modal-unlock" role="dialog" aria-modal="true" aria-label="解锁">
+  <div class="modal-card">
+    <div class="modal-title">解锁</div>
+    <div class="modal-body" id="unlock-info"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="btn-unlock-cancel">再写写</button>
+      <button type="button" class="btn btn-primary" id="btn-unlock-confirm">导出 TXT</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 弹窗：放弃确认 ============ -->
+<div class="modal" id="modal-abandon" role="dialog" aria-modal="true" aria-label="放弃本次写作">
+  <div class="modal-card">
+    <div class="modal-title">放弃本次写作</div>
+    <div class="modal-body">放弃后，本次写下的所有内容将被永久删除，且无法导出。</div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="btn-abandon-cancel">继续写</button>
+      <button type="button" class="btn btn-primary" id="btn-abandon-confirm">确认放弃</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 弹窗：覆盖确认 ============ -->
+<div class="modal" id="modal-overwrite" role="dialog" aria-modal="true" aria-label="覆盖确认">
+  <div class="modal-card">
+    <div class="modal-title">注意</div>
+    <div class="modal-body">你还有一篇未解锁的文档。新建文档会覆盖它，且无法恢复。</div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="btn-overwrite-cancel">取消</button>
+      <button type="button" class="btn btn-primary" id="btn-overwrite-confirm">仍然新建</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 弹窗：完成页新建确认 ============ -->
+<div class="modal" id="modal-new-confirm" role="dialog" aria-modal="true" aria-label="新建文档">
+  <div class="modal-card">
+    <div class="modal-title">新建文档</div>
+    <div class="modal-body">新建后，当前这篇已完成的稿子将从本机删除。<br><br>请确认你已经下载或复制过全文。</div>
+    <div class="modal-actions-vertical">
+      <button type="button" class="btn btn-primary btn-block" id="btn-new-confirm-copy">先复制全文</button>
+      <button type="button" class="btn btn-ghost btn-block" id="btn-new-confirm-ok">我已保存，新建</button>
+      <button type="button" class="btn btn-ghost btn-block" id="btn-new-confirm-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Toast ============ -->
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= 常量 ================= */
+  var LS_KEY = 'blindwriter.v1';
+  var LONG_LEAVE_MS = 5 * 60 * 1000;   // 离开超过 5 分钟：自动暂停
+  var SHORT_LEAVE_MS = 15 * 1000;      // 离开超过 15 秒：提示已暂停计时
+  var TICK_MS = 250;
+  var SAVE_IDLE_MS = 600;
+  var SAVE_TICK_MS = 5000;
+
+  /* ================= 运行时状态 ================= */
+  var state = null;
+
+  var setupMode = 'words';
+  var goalMode = 'template';
+  var activeScreen = 'home';
+
+  // 计时：elapsedMs 是已结算的时间，runSince 是本次连续计时的起点
+  var runSince = 0;
+  var hiddenAt = 0;
+
+  var tickTimer = null;
+  var saveTimer = null;
+  var lastSavedAt = 0;
+  var storageWarned = false;
+
+  var pendingResumeHint = false;
+  var resumeDismissed = false;
+
+  // 中文输入法合成状态
+  var composing = false;
+  var compositionTimer = 0;
+
+  // 视口同步
+  var viewportRaf = 0;
+
+  /* ================= DOM ================= */
+  function $(id) { return document.getElementById(id); }
+
+  var screens = {
+    home: $('screen-home'),
+    setup: $('screen-setup'),
+    writing: $('screen-writing'),
+    done: $('screen-done')
+  };
+
+  var blind            = $('blind');
+  var writeTip         = $('write-tip');
+  var refocusTip       = $('refocus-tip');
+  var statLabel        = $('stat-label');
+  var barFill          = $('bar-fill');
+  var btnUnlock        = $('btn-unlock');
+  var goalPanel        = $('goal-panel');
+  var goalInner        = $('goal-panel-inner');
+  var pauseOverlay     = $('pause-overlay');
+  var pauseGoalsEl     = $('pause-goals');
+  var pauseNote        = $('pause-note');
+  var pauseStats       = $('pause-stats');
+  var resumeStrip      = $('resume-strip');
+  var resumeStripText  = $('resume-strip-text');
+  var toastEl          = $('toast');
+  var doneStats        = $('done-stats');
+  var unlockInfo       = $('unlock-info');
+
+  /* ================= 基础工具 ================= */
+  function countChars(s) {
+    if (!s) return 0;
+    return Array.from(String(s).replace(/\s+/g, '')).length;
+  }
+
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+  function fmtTime(ms) {
+    var total = Math.max(0, Math.floor(ms / 1000));
+    var m = Math.floor(total / 60);
+    var s = total % 60;
+    return pad2(m) + ':' + pad2(s);
+  }
+
+  function toInt(v, def, min, max) {
+    var n = parseInt(v, 10);
+    if (!isFinite(n)) n = def;
+    n = Math.floor(n);
+    if (n < min) n = min;
+    if (n > max) n = max;
+    return n;
+  }
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastEl._timer);
+    toastEl._timer = setTimeout(function () {
+      toastEl.classList.remove('show');
+    }, 2400);
+  }
+
+  function vibrate(pattern) {
+    if (navigator.vibrate) {
+      try { navigator.vibrate(pattern); } catch (e) { /* 忽略 */ }
+    }
+  }
+
+  function legacyCopy(text) {
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+      document.body.appendChild(ta);
+
+      try {
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('copy failed'));
+      } catch (e) {
+        if (ta.parentNode) ta.parentNode.removeChild(ta);
+        reject(e);
+      }
+    });
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () {
+        return legacyCopy(text);
+      });
+    }
+    return legacyCopy(text);
+  }
+
+  /* ================= 视口（iOS 键盘） ================= */
+  function syncViewport() {
+    var vv = window.visualViewport;
+    var h = vv && vv.height ? vv.height : (window.innerHeight || 0);
+    var top = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
+
+    if (!h || h < 120) h = window.innerHeight || 600;
+
+    var root = document.documentElement;
+    root.style.setProperty('--app-h', Math.round(h) + 'px');
+    root.style.setProperty('--app-top', Math.max(0, Math.round(top)) + 'px');
+  }
+
+  function requestViewportSync() {
+    if (viewportRaf) return;
+    viewportRaf = window.requestAnimationFrame(function () {
+      viewportRaf = 0;
+      syncViewport();
+    });
+  }
+
+  /* ================= 本地存储 ================= */
+  function normalizeGoals(rawGoals, legacyCard) {
+    var out = [];
+
+    function push(label, text, done) {
+      var t = typeof text === 'string' ? text.trim() : '';
+      if (!t) return;
+      out.push({
+        label: label ? String(label) : null,
+        text: t.slice(0, 500),
+        done: !!done
+      });
+    }
+
+    if (Array.isArray(rawGoals)) {
+      rawGoals.forEach(function (g) {
+        if (!g) return;
+        if (typeof g === 'string') { push(null, g, false); return; }
+        push(g.label, g.text, g.done);
+      });
+    } else if (typeof legacyCard === 'string') {
+      legacyCard.split(/\r?\n/).forEach(function (line) {
+        push(null, line, false);
+      });
+    }
+
+    return out;
+  }
+
+  function normalizeState(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    if (raw.phase !== 'writing' && raw.phase !== 'paused' && raw.phase !== 'done') return null;
+
+    var s = raw;
+
+    s.content = typeof s.content === 'string' ? s.content : '';
+    s.mode = s.mode === 'time' ? 'time' : 'words';
+    s.targetWords = toInt(s.targetWords, 2000, 1, 500000);
+    s.targetMinutes = toInt(s.targetMinutes, 20, 1, 1440);
+    s.elapsedMs = (isFinite(s.elapsedMs) && s.elapsedMs > 0) ? Math.floor(s.elapsedMs) : 0;
+    s.goals = normalizeGoals(s.goals, s.goalCard);
+    delete s.goalCard;
+    s.resumeNote = typeof s.resumeNote === 'string' ? s.resumeNote.slice(0, 500) : '';
+    s.pauseCount = toInt(s.pauseCount, 0, 0, 1000000);
+    s.deletedChars = toInt(s.deletedChars, 0, 0, 100000000);
+    s.lastCount = countChars(s.content);
+    s.notified = !!s.notified;
+    s.unlocked = s.phase === 'done' || !!s.unlocked;
+    s.createdAt = isFinite(s.createdAt) ? s.createdAt : 0;
+    s.savedAt = isFinite(s.savedAt) ? s.savedAt : 0;
+    s.unlockedAt = isFinite(s.unlockedAt) ? s.unlockedAt : 0;
+
+    return s;
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      return normalizeState(JSON.parse(raw));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function save() {
+    if (!state) return;
+
+    state.savedAt = Date.now();
+
+    var payload;
+    try {
+      payload = JSON.stringify(Object.assign({}, state, { elapsedMs: nowElapsed() }));
+    } catch (e) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(LS_KEY, payload);
+      lastSavedAt = Date.now();
+    } catch (e) {
+      if (!storageWarned) {
+        storageWarned = true;
+        toast('本地保存失败，请勿关闭页面');
+      }
+    }
+  }
+
+  function saveDebounced() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, SAVE_IDLE_MS);
+  }
+
+  /* ================= 计时 ================= */
+  function nowElapsed() {
+    var base = state ? (state.elapsedMs || 0) : 0;
+    return base + (runSince ? Math.max(0, Date.now() - runSince) : 0);
+  }
+
+  function stopTimer() {
+    if (!runSince) return;
+    var d = Date.now() - runSince;
+    runSince = 0;
+    if (state && d > 0) {
+      state.elapsedMs = (state.elapsedMs || 0) + d;
+    }
+  }
+
+  function canRunTimer() {
+    if (!state || state.phase !== 'writing') return false;
+    if (activeScreen !== 'writing') return false;
+    if (!pauseOverlay.hidden) return false;
+    if (document.querySelector('.modal.show')) return false;
+    if (document.visibilityState === 'hidden') return false;
+    return true;
+  }
+
+  function syncTimer() {
+    if (canRunTimer()) {
+      if (!runSince) runSince = Date.now();
+    } else {
+      stopTimer();
+    }
+  }
+
+  function startTick() {
+    if (tickTimer) return;
+
+    tickTimer = setInterval(function () {
+      if (!state) return;
+
+      if (state.phase === 'writing' && activeScreen === 'writing') {
+        updateWritingUI();
+      }
+
+      if (state.phase === 'writing' && Date.now() - lastSavedAt > SAVE_TICK_MS) {
+        save();
+      }
+    }, TICK_MS);
+  }
+
+  /* ================= 屏幕切换 ================= */
+  function showScreen(name) {
+    activeScreen = name;
+
+    Object.keys(screens).forEach(function (k) {
+      screens[k].classList.toggle('active', k === name);
+    });
+
+    if (name !== 'writing') {
+      try { blind.blur(); } catch (e) { /* 忽略 */ }
+    }
+
+    syncTimer();
+  }
+
+  /* ================= 写作页 UI ================= */
+  function updateWritingUI() {
+    if (!state) return;
+
+    var current, target, ratio, reached;
+
+    if (state.mode === 'words') {
+      current = countChars(state.content);
+      target = state.targetWords;
+      statLabel.textContent = current + ' / ' + target + ' 字';
+    } else {
+      current = nowElapsed();
+      target = state.targetMinutes * 60000;
+      statLabel.textContent = fmtTime(current) + ' / ' + fmtTime(target);
+    }
+
+    ratio = target > 0 ? Math.min(1, current / target) : 1;
+    barFill.style.width = (ratio * 100).toFixed(2) + '%';
+
+    reached = current >= target;
+
+    if (reached && state.phase === 'writing') {
+      if (btnUnlock.hidden) {
+        btnUnlock.hidden = false;
+        if (!state.notified) {
+          state.notified = true;
+          save();
+          toast('已达成目标，可以解锁了');
+          vibrate([30, 50, 30]);
+        }
+      }
+    } else if (!btnUnlock.hidden) {
+      btnUnlock.hidden = true;
+    }
+  }
+
+  function isReached() {
+    if (!state) return false;
+    if (state.mode === 'words') {
+      return countChars(state.content) >= state.targetWords;
+    }
+    return nowElapsed() >= state.targetMinutes * 60000;
+  }
+
+  /* ================= 输入同步（含中文输入法） ================= */
+  function syncFromInput() {
+    if (!state || state.phase !== 'writing') return;
+    if (composing) return;
+
+    var val = blind.value;
+    var n = countChars(val);
+
+    // 统计删减（只统计已提交的正文）
+    if (n < state.lastCount) {
+      state.deletedChars = (state.deletedChars || 0) + (state.lastCount - n);
+    }
+
+    state.lastCount = n;
+    state.content = val;
+    state.savedAt = Date.now();
+
+    writeTip.classList.toggle('hide', !!val);
+
+    updateWritingUI();
+    saveDebounced();
+  }
+
+  /* ================= 目标卡渲染 ================= */
+  function buildGoalNode(goal, index) {
+    var item = document.createElement('div');
+    item.className = 'goal-item' + (goal.done ? ' done' : '');
+    item.setAttribute('role', 'checkbox');
+    item.setAttribute('aria-checked', goal.done ? 'true' : 'false');
+    item.setAttribute('data-goal-index', String(index));
+    item.tabIndex = 0;
+
+    if (goal.label) {
+      var labelEl = document.createElement('span');
+      labelEl.className = 'goal-label';
+      labelEl.textContent = goal.label;
+      item.appendChild(labelEl);
+    }
+
+    var checkEl = document.createElement('span');
+    checkEl.className = 'goal-check';
+
+    var textEl = document.createElement('span');
+    textEl.className = 'goal-text';
+    textEl.textContent = goal.text;
+
+    item.appendChild(checkEl);
+    item.appendChild(textEl);
+
+    function toggle() {
+      goal.done = !goal.done;
+
+      vibrate(10);
+      saveDebounced();
+
+      var nodes = document.querySelectorAll('.goal-item[data-goal-index="' + index + '"]');
+      Array.prototype.forEach.call(nodes, function (node) {
+        node.classList.toggle('done', goal.done);
+        node.setAttribute('aria-checked', goal.done ? 'true' : 'false');
+      });
+
+      // 修复：暂停层里勾选目标卡时，不应该把键盘唤回写作区
+      if (activeScreen === 'writing' && state && state.phase === 'writing' && pauseOverlay.hidden) {
+        focusBlind(false);
+      }
+    }
+
+    item.addEventListener('click', toggle);
+    item.addEventListener('keydown', function (e) {
+      if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+
+    return item;
+  }
+
+  function renderGoalsInto(container, showEmpty) {
+    if (!container) return false;
+
+    container.innerHTML = '';
+
+    var goals = (state && Array.isArray(state.goals)) ? state.goals : [];
+
+    if (!goals.length) {
+      if (showEmpty) {
+        var empty = document.createElement('div');
+        empty.className = 'goal-empty';
+        empty.textContent = '没有填写目标卡';
+        container.appendChild(empty);
+      }
+      return false;
+    }
+
+    goals.forEach(function (g, index) {
+      container.appendChild(buildGoalNode(g, index));
+    });
+
+    return true;
+  }
+
+  /* ================= 续写提示条 ================= */
+  function renderResumeStrip() {
+    var note = (state && state.resumeNote) ? state.resumeNote.trim() : '';
+
+    if (note && !resumeDismissed) {
+      resumeStripText.textContent = '继续：' + note;
+      resumeStrip.hidden = false;
+    } else {
+      resumeStrip.hidden = true;
+    }
+  }
+
+  /* ================= 焦点 ================= */
+  function focusBlind(toEnd) {
+    if (!state || state.phase !== 'writing' || activeScreen !== 'writing') return;
+
+    try {
+      blind.focus({ preventScroll: true });
+    } catch (e) {
+      try { blind.focus(); } catch (e2) { return; }
+    }
+
+    if (toEnd) {
+      try {
+        var n = blind.value.length;
+        blind.setSelectionRange(n, n);
+        blind.scrollTop = blind.scrollHeight;
+      } catch (e) { /* 忽略 */ }
+    }
+
+    requestViewportSync();
+    setTimeout(requestViewportSync, 300);
+  }
+
+  /* ================= 进入写作页 ================= */
+  function enterWriting() {
+    if (!state) return;
+
+    blind.value = state.content || '';
+    state.lastCount = countChars(state.content);
+    composing = false;
+
+    writeTip.classList.toggle('hide', !!blind.value);
+    refocusTip.hidden = true;
+
+    renderGoalsInto(goalInner, false);
+    goalPanel.hidden = !(state.goals && state.goals.length);
+
+    resumeDismissed = false;
+    renderResumeStrip();
+
+    showScreen('writing');
+    updateWritingUI();
+
+    if (state.phase === 'paused') {
+      openPauseOverlay();
+      if (pendingResumeHint) {
+        toast('离开较久，已自动暂停');
+        pendingResumeHint = false;
+      }
+    } else {
+      syncTimer();
+      focusBlind(true);
+    }
+  }
+
+  /* ================= 首页 / 设置页 ================= */
+  function refreshHome() {
+    var resumable = !!(state && (state.phase === 'writing' || state.phase === 'paused'));
+    $('btn-resume').hidden = !resumable;
+  }
+
+  function goSetup() {
+    setupMode = 'words';
+    goalMode = 'template';
+
+    Array.prototype.forEach.call(document.querySelectorAll('#mode-switch .seg'), function (b) {
+      b.classList.toggle('active', b.dataset.mode === 'words');
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('#goal-mode-switch .seg'), function (b) {
+      b.classList.toggle('active', b.dataset.goalMode === 'template');
+    });
+
+    $('field-words').hidden = false;
+    $('field-time').hidden = true;
+    $('goal-template-inputs').hidden = false;
+    $('goal-free-inputs').hidden = true;
+
+    $('input-words').value = (state && state.targetWords) ? state.targetWords : 2000;
+    $('input-time').value = (state && state.targetMinutes) ? state.targetMinutes : 20;
+
+    Array.prototype.forEach.call(document.querySelectorAll('.goal-template-input'), function (inp) {
+      inp.value = '';
+    });
+    $('input-goal-free').value = '';
+
+    showScreen('setup');
+  }
+
+  /* ================= 开始写作 ================= */
+  function startWriting() {
+    var wordsRaw = $('input-words').value;
+    var minsRaw = $('input-time').value;
+
+    var words = parseInt(wordsRaw, 10);
+    var mins = parseInt(minsRaw, 10);
+
+    if (setupMode === 'words' && (!isFinite(words) || words <= 0)) {
+      toast('请填写有效的目标字数');
+      return;
+    }
+
+    if (setupMode === 'time' && (!isFinite(mins) || mins <= 0)) {
+      toast('请填写有效的目标时长');
+      return;
+    }
+
+    if (state && (state.phase === 'writing' || state.phase === 'paused')) {
+      openModal('modal-overwrite');
+      return;
+    }
+
+    words = toInt(words, 2000, 1, 500000);
+    mins = toInt(mins, 20, 1, 1440);
+
+    var goals = [];
+
+    if (goalMode === 'template') {
+      Array.prototype.forEach.call(document.querySelectorAll('.goal-template-input'), function (inp) {
+        var v = (inp.value || '').trim();
+        if (v) {
+          goals.push({
+            label: inp.dataset.label || null,
+            text: v.slice(0, 500),
+            done: false
+          });
+        }
+      });
+    } else {
+      var raw = $('input-goal-free').value || '';
+      raw.split(/\r?\n/).forEach(function (line) {
+        var v = line.trim();
+        if (v) {
+          goals.push({ label: null, text: v.slice(0, 500), done: false });
+        }
+      });
+    }
+
+    var now = Date.now();
+
+    state = {
+      phase: 'writing',
+      mode: setupMode,
+      targetWords: words,
+      targetMinutes: mins,
+      content: '',
+      goals: goals,
+      resumeNote: '',
+      pauseCount: 0,
+      deletedChars: 0,
+      lastCount: 0,
+      elapsedMs: 0,
+      notified: false,
+      unlocked: false,
+      unlockedAt: 0,
+      createdAt: now,
+      savedAt: now
+    };
+
+    runSince = 0;
+    hiddenAt = 0;
+    composing = false;
+    pendingResumeHint = false;
+    resumeDismissed = false;
+
+    save();
+    enterWriting();
+  }
+
+  /* ================= 暂停 / 继续 ================= */
+  function pauseWriting() {
+    if (!state || state.phase !== 'writing') return;
+
+    // 先失焦，让输入法把最后一个字提交进来，再同步内容
+    try { blind.blur(); } catch (e) { /* 忽略 */ }
+    syncFromInput();
+
+    stopTimer();
+
+    state.phase = 'paused';
+    state.pauseCount = (state.pauseCount || 0) + 1;
+
+    save();
+    openPauseOverlay();
+    vibrate(15);
+  }
+
+  function openPauseOverlay() {
+    if (!state) return;
+
+    stopTimer();
+
+    pauseStats.textContent = countChars(state.content) + ' 字 · ' + fmtTime(nowElapsed());
+
+    renderGoalsInto(pauseGoalsEl, true);
+    pauseNote.value = state.resumeNote || '';
+
+    refocusTip.hidden = true;
+    pauseOverlay.hidden = false;
+
+    syncTimer();
+  }
+
+  function closePauseOverlay() {
+    pauseOverlay.hidden = true;
+    syncTimer();
+  }
+
+  function resumeWriting() {
+    if (!state) return;
+
+    state.resumeNote = (pauseNote.value || '').trim().slice(0, 500);
+    state.phase = 'writing';
+
+    save();
+
+    closePauseOverlay();
+    renderResumeStrip();
+    updateWritingUI();
+    focusBlind(true);
+  }
+
+  /* ================= 弹窗 ================= */
+  function openModal(id) {
+    var m = $(id);
+    if (!m) return;
+
+    try { blind.blur(); } catch (e) { /* 忽略 */ }
+    refocusTip.hidden = true;
+
+    m.classList.add('show');
+    syncTimer();
+  }
+
+  function closeModal(id) {
+    var m = $(id);
+    if (!m) return;
+
+    m.classList.remove('show');
+    syncTimer();
+  }
+
+  function closeAllModals() {
+    Array.prototype.forEach.call(document.querySelectorAll('.modal.show'), function (m) {
+      m.classList.remove('show');
+    });
+    syncTimer();
+  }
+
+  /* ================= 导出 / 复制 ================= */
+  function downloadTxt() {
+    if (!state) return false;
+
+    var content = state.content || '';
+
+    try {
+      var blob = new Blob(['\uFEFF' + content], { type: 'text/plain;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+
+      var d = new Date();
+      var filename = '盲写稿_' +
+        d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '_' +
+        pad2(d.getHours()) + pad2(d.getMinutes()) + '.txt';
+
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(function () {
+        if (a.parentNode) a.parentNode.removeChild(a);
+        try { URL.revokeObjectURL(url); } catch (e) { /* 忽略 */ }
+      }, 2000);
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function copyFullText() {
+    if (!state || !state.content) {
+      toast('没有可复制的内容');
+      return;
+    }
+
+    copyText(state.content).then(function () {
+      toast('全文已复制到剪贴板');
+    }).catch(function () {
+      toast('复制失败，请改用下载');
+    });
+  }
+
+  /* ================= 完成页 ================= */
+  function addStatRow(label, value) {
+    var row = document.createElement('div');
+    row.className = 'stat-row';
+
+    var s = document.createElement('span');
+    s.textContent = label;
+
+    var b = document.createElement('b');
+    b.textContent = value;
+
+    row.appendChild(s);
+    row.appendChild(b);
+    doneStats.appendChild(row);
+  }
+
+  function renderDone() {
+    if (!state) return;
+
+    doneStats.innerHTML = '';
+
+    var chars = countChars(state.content);
+    var cond = state.mode === 'words'
+      ? '目标 ' + state.targetWords + ' 字'
+      : '目标 ' + state.targetMinutes + ' 分钟';
+
+    addStatRow('本次字数', chars + ' 字');
+    addStatRow('本次用时', fmtTime(nowElapsed()));
+
+    if (state.deletedChars > 0) {
+      addStatRow('写作中删减', state.deletedChars + ' 字');
+    }
+
+    if (state.goals && state.goals.length) {
+      var done = state.goals.filter(function (g) { return g.done; }).length;
+      addStatRow('目标卡完成', done + ' / ' + state.goals.length);
+    }
+
+    addStatRow('暂停次数', (state.pauseCount || 0) + ' 次');
+    addStatRow('解锁条件', cond);
+  }
+
+  /* ================= 解锁 ================= */
+  function openUnlockModal() {
+    if (!state || state.phase !== 'writing') return;
+
+    if (!isReached()) {
+      toast('还没达成目标');
+      return;
+    }
+
+    var chars = countChars(state.content);
+
+    unlockInfo.textContent =
+      '本次共写 ' + chars + ' 字，用时 ' + fmtTime(nowElapsed()) + '，暂停 ' +
+      (state.pauseCount || 0) + ' 次。\n\n' +
+      '解锁后，内容会导出为 TXT 文件，本工具内不再提供修改。';
+
+    openModal('modal-unlock');
+  }
+
+  function confirmUnlock() {
+    if (!state || state.phase !== 'writing') {
+      closeModal('modal-unlock');
+      return;
+    }
+
+    if (!isReached()) {
+      closeModal('modal-unlock');
+      toast('还没达成目标');
+      return;
+    }
+
+    closeModal('modal-unlock');
+
+    // 收尾：把输入框里已提交的最后一个字同步进来
+    composing = false;
+    if (blind.value) state.content = blind.value;
+
+    stopTimer();
+
+    state.phase = 'done';
+    state.unlocked = true;
+    state.unlockedAt = Date.now();
+    state.lastCount = countChars(state.content);
+
+    save();
+
+    var ok = downloadTxt();
+
+    renderDone();
+    closePauseOverlay();
+    showScreen('done');
+
+    if (ok) {
+      toast('已开始下载；若失败请点「复制全文」');
+    } else {
+      toast('下载失败，请点「复制全文」');
+    }
+
+    vibrate([20, 60, 20]);
+  }
+
+  /* ================= 重置 / 清除会话 ================= */
+  function resetWritingUI() {
+    clearTimeout(saveTimer);
+    clearTimeout(compositionTimer);
+
+    blind.value = '';
+    composing = false;
+
+    writeTip.classList.remove('hide');
+    refocusTip.hidden = true;
+
+    btnUnlock.hidden = true;
+    goalPanel.hidden = true;
+    goalInner.innerHTML = '';
+    pauseGoalsEl.innerHTML = '';
+    pauseNote.value = '';
+
+    resumeStrip.hidden = true;
+    resumeStripText.textContent = '';
+    resumeDismissed = false;
+
+    pauseOverlay.hidden = true;
+
+    barFill.style.width = '0%';
+    statLabel.textContent = state ? statLabel.textContent : '0 / 0';
+
+    closeAllModals();
+  }
+
+  function clearSession() {
+    stopTimer();
+
+    state = null;
+    composing = false;
+    pendingResumeHint = false;
+    resumeDismissed = false;
+    hiddenAt = 0;
+
+    try { localStorage.removeItem(LS_KEY); } catch (e) { /* 忽略 */ }
+
+    resetWritingUI();
+    lastSavedAt = 0;
+  }
+
+  /* ================= 初始化 ================= */
+  function init() {
+    syncViewport();
+    startTick();
+
+    state = loadState();
+
+    if (state && state.phase === 'done') {
+      renderDone();
+      showScreen('done');
+      return;
+    }
+
+    if (state && state.phase === 'writing') {
+      var lastActive = state.savedAt || state.createdAt || 0;
+
+      if (lastActive > 0 && (Date.now() - lastActive) > LONG_LEAVE_MS && countChars(state.content) > 0) {
+        state.phase = 'paused';
+        state.pauseCount = (state.pauseCount || 0) + 1;
+        pendingResumeHint = true;
+        save();
+      }
+    }
+
+    showScreen('home');
+    refreshHome();
+  }
+
+  /* ================= 页面生命周期 ================= */
+  document.addEventListener('visibilitychange', function () {
+    if (!state) return;
+
+    if (document.visibilityState === 'hidden') {
+      if (state.phase === 'writing') {
+        stopTimer();
+        save();
+        hiddenAt = Date.now();
+      }
+      return;
+    }
+
+    // 回到前台
+    if (state.phase !== 'writing') {
+      hiddenAt = 0;
+      return;
+    }
+
+    // 不在写作页（例如停在首页）时，不自动暂停，也不计时
+    if (activeScreen !== 'writing') {
+      hiddenAt = 0;
+      syncTimer();
+      return;
+    }
+
+    // 弹窗还开着：交给关闭弹窗时的 syncTimer 处理
+    if (document.querySelector('.modal.show')) {
+      hiddenAt = 0;
+      return;
+    }
+
+    var away = hiddenAt ? (Date.now() - hiddenAt) : 0;
+    hiddenAt = 0;
+
+    if (away > LONG_LEAVE_MS && countChars(state.content) > 0) {
+      // 长时间离开：自动暂停，守住“离开不计时”
+      stopTimer();
+      state.phase = 'paused';
+      state.pauseCount = (state.pauseCount || 0) + 1;
+      save();
+      openPauseOverlay();
+      toast('离开较久，已自动暂停');
+      return;
+    }
+
+    syncTimer();
+    updateWritingUI();
+
+    if (away > SHORT_LEAVE_MS) {
+      toast('已暂停计时 ' + fmtTime(away));
+    }
+  });
+
+  window.addEventListener('pagehide', function () {
+    if (!state) return;
+    stopTimer();
+    save();
+  });
+
+  window.addEventListener('pageshow', function () {
+    if (!state) return;
+
+    // bfcache 恢复：如果离开很久，仍然自动暂停，避免“走开也算写作时间”
+    if (state.phase === 'writing' && activeScreen === 'writing' &&
+        state.savedAt && (Date.now() - state.savedAt) > LONG_LEAVE_MS &&
+        countChars(state.content) > 0) {
+      stopTimer();
+      state.phase = 'paused';
+      state.pauseCount = (state.pauseCount || 0) + 1;
+      save();
+      openPauseOverlay();
+      toast('离开较久，已自动暂停');
+      return;
+    }
+
+    syncTimer();
+    if (state.phase === 'writing' && activeScreen === 'writing') {
+      updateWritingUI();
+    }
+  });
+
+  window.addEventListener('beforeunload', function () {
+    if (state) {
+      stopTimer();
+      save();
+    }
+  });
+
+  window.addEventListener('resize', requestViewportSync);
+  window.addEventListener('orientationchange', function () {
+    setTimeout(requestViewportSync, 80);
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', requestViewportSync);
+    window.visualViewport.addEventListener('scroll', requestViewportSync);
+  }
+
+  /* ================= 事件绑定 ================= */
+
+  /* --- 首页 --- */
+  $('btn-new').addEventListener('click', function () {
+    if (state && (state.phase === 'writing' || state.phase === 'paused')) {
+      openModal('modal-overwrite');
+      return;
+    }
+
+    if (state && state.phase === 'done') {
+      openModal('modal-new-confirm');
+      return;
+    }
+
+    goSetup();
+  });
+
+  $('btn-resume').addEventListener('click', function () {
+    if (state && (state.phase === 'writing' || state.phase === 'paused')) {
+      enterWriting();
+    }
+  });
+
+  /* --- 设置页：解锁条件 --- */
+  Array.prototype.forEach.call(document.querySelectorAll('#mode-switch .seg'), function (btn) {
+    btn.addEventListener('click', function () {
+      setupMode = btn.dataset.mode;
+
+      Array.prototype.forEach.call(document.querySelectorAll('#mode-switch .seg'), function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+
+      $('field-words').hidden = setupMode !== 'words';
+      $('field-time').hidden = setupMode !== 'time';
+    });
+  });
+
+  /* --- 设置页：目标卡模式 --- */
+  Array.prototype.forEach.call(document.querySelectorAll('#goal-mode-switch .seg'), function (btn) {
+    btn.addEventListener('click', function () {
+      goalMode = btn.dataset.goalMode;
+
+      Array.prototype.forEach.call(document.querySelectorAll('#goal-mode-switch .seg'), function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+
+      $('goal-template-inputs').hidden = goalMode !== 'template';
+      $('goal-free-inputs').hidden = goalMode !== 'free';
+    });
+  });
+
+  $('btn-setup-back').addEventListener('click', function () {
+    showScreen('home');
+    refreshHome();
+  });
+
+  $('btn-start').addEventListener('click', startWriting);
+
+  /* --- 写作页：输入 --- */
+  blind.addEventListener('compositionstart', function () {
+    composing = true;
+  });
+
+  blind.addEventListener('compositionend', function () {
+    composing = false;
+    clearTimeout(compositionTimer);
+    compositionTimer = setTimeout(syncFromInput, 0);
+  });
+
+  blind.addEventListener('input', function (e) {
+    if (composing || (e && e.isComposing)) return;
+    syncFromInput();
+  });
+
+  blind.addEventListener('beforeinput', function (e) {
+    if (!e) return;
+    if (e.inputType === 'insertFromPaste' ||
+        e.inputType === 'insertFromDrop' ||
+        e.inputType === 'insertFromYank') {
+      e.preventDefault();
+      toast('写作中不支持粘贴');
+    }
+  });
+
+  blind.addEventListener('focus', function () {
+    writeTip.classList.add('hide');
+    refocusTip.hidden = true;
+    requestViewportSync();
+    setTimeout(requestViewportSync, 300);
+  });
+
+  blind.addEventListener('blur', function () {
+    // 失焦时输入法会把最后一个字提交进来，这里兜底同步一次
+    composing = false;
+    syncFromInput();
+
+    if (!blind.value) {
+      writeTip.classList.remove('hide');
+      refocusTip.hidden = true;
+    } else if (state && state.phase === 'writing' && activeScreen === 'writing' && pauseOverlay.hidden) {
+      refocusTip.hidden = false;
+    } else {
+      refocusTip.hidden = true;
+    }
+  });
+
+  blind.addEventListener('paste', function (e) {
+    e.preventDefault();
+    toast('写作中不支持粘贴');
+  });
+
+  blind.addEventListener('drop', function (e) { e.preventDefault(); });
+  blind.addEventListener('dragover', function (e) { e.preventDefault(); });
+
+  blind.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  /* --- 写作页：暂停 --- */
+  $('btn-pause').addEventListener('click', pauseWriting);
+
+  /* --- 暂停层：续写卡 --- */
+  pauseNote.addEventListener('input', function () {
+    if (!state) return;
+    state.resumeNote = pauseNote.value.slice(0, 500);
+    saveDebounced();
+  });
+
+  /* --- 暂停层：继续 / 放弃 --- */
+  $('btn-pause-resume').addEventListener('click', resumeWriting);
+
+  $('btn-pause-abandon').addEventListener('click', function () {
+    openModal('modal-abandon');
+  });
+
+  /* --- 续写提示条关闭 --- */
+  $('btn-resume-close').addEventListener('click', function () {
+    resumeStrip.hidden = true;
+    resumeDismissed = true;
+  });
+
+  /* --- 写作页：解锁 --- */
+  btnUnlock.addEventListener('click', openUnlockModal);
+
+  $('btn-unlock-cancel').addEventListener('click', function () {
+    closeModal('modal-unlock');
+    focusBlind(false);
+  });
+
+  $('btn-unlock-confirm').addEventListener('click', confirmUnlock);
+
+  /* --- 放弃 --- */
+  $('btn-abandon').addEventListener('click', function () {
+    openModal('modal-abandon');
+  });
+
+  $('btn-abandon-cancel').addEventListener('click', function () {
+    closeModal('modal-abandon');
+
+    if (state && state.phase === 'writing') {
+      focusBlind(false);
+    }
+  });
+
+  $('btn-abandon-confirm').addEventListener('click', function () {
+    clearSession();
+    showScreen('home');
+    refreshHome();
+    toast('已放弃本次写作');
+  });
+
+  /* --- 覆盖确认 --- */
+  $('btn-overwrite-cancel').addEventListener('click', function () {
+    closeModal('modal-overwrite');
+  });
+
+  $('btn-overwrite-confirm').addEventListener('click', function () {
+    clearSession();
+    goSetup();
+  });
+
+  /* --- 完成页 --- */
+  $('btn-download-again').addEventListener('click', function () {
+    if (downloadTxt()) {
+      toast('已开始下载');
+    } else {
+      toast('下载失败，请点「复制全文」');
+    }
+  });
+
+  $('btn-copy-done').addEventListener('click', copyFullText);
+
+  $('btn-new-2').addEventListener('click', function () {
+    openModal('modal-new-confirm');
+  });
+
+  $('btn-new-confirm-copy').addEventListener('click', copyFullText);
+
+  $('btn-new-confirm-cancel').addEventListener('click', function () {
+    closeModal('modal-new-confirm');
+  });
+
+  $('btn-new-confirm-ok').addEventListener('click', function () {
+    clearSession();
+    goSetup();
+  });
+
+  /* ================= 启动 ================= */
+  init();
+
+})();
+</script>
+</body>
+</html>
